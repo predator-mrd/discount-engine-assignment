@@ -1,0 +1,163 @@
+{
+  "results": [
+    {
+      "itemId": "ITEM-01",
+      "product": "Cushion Cover",
+      "brand": "Natura Casa",
+      "platform": "Amazon India",
+      "basePrice": 1299,
+      "finalPrice": 1104,
+      "totalDiscount": 195,
+      "appliedRules": [
+        "RULE-01"
+      ],
+      "skippedRules": [
+        "RULE-02"
+      ],
+      "reasoning": "Platform offer: 15% off (best saving: Rs.195; next offer: Rs.150)",
+      "offers": [
+        {
+          "ruleId": "RULE-01",
+          "label": "Platform offer: 15% off",
+          "saving": 195,
+          "priceBefore": 1299,
+          "priceAfter": 1104
+        }
+      ],
+      "status": "Max discount"
+    },
+    {
+      "itemId": "ITEM-02",
+      "product": "Bed Sheet Set",
+      "brand": "Natura Casa",
+      "platform": "Flipkart",
+      "basePrice": 849,
+      "finalPrice": 629,
+      "totalDiscount": 220,
+      "appliedRules": [
+        "RULE-02",
+        "RULE-03"
+      ],
+      "skippedRules": [],
+      "reasoning": "Brand offer: Rs.150 off + Platform offer: 10% off",
+      "offers": [
+        {
+          "ruleId": "RULE-02",
+          "label": "Brand offer: Rs.150 off",
+          "saving": 150,
+          "priceBefore": 849,
+          "priceAfter": 699
+        },
+        {
+          "ruleId": "RULE-03",
+          "label": "Platform offer: 10% off",
+          "saving": 70,
+          "priceBefore": 699,
+          "priceAfter": 629
+        }
+      ],
+      "status": "Stacked"
+    },
+    {
+      "itemId": "ITEM-03",
+      "product": "Wall Shelf",
+      "brand": "LivSpace Pro",
+      "platform": "Amazon India",
+      "basePrice": 599,
+      "finalPrice": 509,
+      "totalDiscount": 90,
+      "appliedRules": [
+        "RULE-01"
+      ],
+      "skippedRules": [],
+      "reasoning": "Platform offer: 15% off",
+      "offers": [
+        {
+          "ruleId": "RULE-01",
+          "label": "Platform offer: 15% off",
+          "saving": 90,
+          "priceBefore": 599,
+          "priceAfter": 509
+        }
+      ],
+      "status": "Discount applied"
+    },
+    {
+      "itemId": "ITEM-04",
+      "product": "Ceramic Vase",
+      "brand": "LivSpace Pro",
+      "platform": "Noon",
+      "basePrice": 2499,
+      "finalPrice": 2499,
+      "totalDiscount": 0,
+      "appliedRules": [],
+      "skippedRules": [],
+      "reasoning": "No offers available",
+      "offers": [],
+      "status": "No offer"
+    },
+    {
+      "itemId": "ITEM-05",
+      "product": "Cutting Board",
+      "brand": "Nordic Basics",
+      "platform": "Amazon India",
+      "basePrice": 449,
+      "finalPrice": 382,
+      "totalDiscount": 67,
+      "appliedRules": [
+        "RULE-01"
+      ],
+      "skippedRules": [],
+      "reasoning": "Platform offer: 15% off",
+      "offers": [
+        {
+          "ruleId": "RULE-01",
+          "label": "Platform offer: 15% off",
+          "saving": 67,
+          "priceBefore": 449,
+          "priceAfter": 382
+        }
+      ],
+      "status": "Discount applied"
+    },
+    {
+      "itemId": "ITEM-06",
+      "product": "Desk Organiser",
+      "brand": "Nordic Basics",
+      "platform": "Flipkart",
+      "basePrice": 899,
+      "finalPrice": 809,
+      "totalDiscount": 90,
+      "appliedRules": [
+        "RULE-03"
+      ],
+      "skippedRules": [],
+      "reasoning": "Platform offer: 10% off",
+      "offers": [
+        {
+          "ruleId": "RULE-03",
+          "label": "Platform offer: 10% off",
+          "saving": 90,
+          "priceBefore": 899,
+          "priceAfter": 809
+        }
+      ],
+      "status": "Discount applied"
+    }
+  ],
+  "baseTotal": 6594,
+  "subtotal": 5932,
+  "cartOffers": [
+    {
+      "ruleId": "RULE-04",
+      "label": "Cart offer: 10% off",
+      "saving": 593,
+      "priceBefore": 5932,
+      "priceAfter": 5339
+    }
+  ],
+  "finalTotal": 5339,
+  "itemSavings": 662,
+  "cartSavings": 593,
+  "totalSavings": 1255
+}

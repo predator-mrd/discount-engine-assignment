@@ -1,20 +1,36 @@
 {
   "name": "discount-engine",
   "version": "1.0.0",
-  "description": "Opptra FDE Intern Assignment — Discount Engine",
+  "description": "A checkout discount engine with reviewed AI rules and PDF cart imports.",
+  "private": true,
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:groq": "node scripts/check-groq.mjs",
+    "samples": "node scripts/generate-samples.mjs",
+    "check": "npm run test && npm run build",
+    "format": "prettier --write ."
   },
   "dependencies": {
-    "papaparse": "^5.4.1",
+    "papaparse": "^5.5.3",
+    "pdfjs-dist": "^6.2.108",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.0.0"
+    "@playwright/test": "^1.56.1",
+    "@vitejs/plugin-react": "^5.1.1",
+    "pdf-lib": "^1.17.1",
+    "prettier": "^3.10.1",
+    "vite": "^7.2.2",
+    "vitest": "^5.1.1"
   }
 }

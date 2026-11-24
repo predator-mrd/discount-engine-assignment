@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.npm-cache/
+test-results/
+playwright-report/
+.sites-runtime/
+package-lock.json
+sample-data/expected-results.json
+public/samples/

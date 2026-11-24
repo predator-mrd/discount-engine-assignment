@@ -1,231 +1,368 @@
-/**
- * App.jsx
- *
- * Top-level component. Manages state for rules, cart items, and results.
- * Wires together CSV upload → parse → engine → display.
- */
-
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import CsvUploader from './components/CsvUploader.jsx'
 import DataTable from './components/DataTable.jsx'
 import ErrorBanner from './components/ErrorBanner.jsx'
-import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
-import { processCart, cartTotal } from './engine/discountEngine.js'
+import RuleInput from './components/RuleInput.jsx'
+import { parseCartCSV, parseRulesCSV } from './engine/csvParser.js'
+import { calculateCart } from './engine/discountEngine.js'
+import { validateDiscountRule } from './engine/validation.js'
+import rulesCSV from '../sample-data/rules.csv?raw'
+import cartCSV from '../sample-data/cart.csv?raw'
 
-// ── Column definitions ───────────────────────────────────────────
-
-const RULES_COLUMNS = [
-  { key: 'ruleId',    label: 'Rule ID' },
-  { key: 'scope',     label: 'Scope',      render: (v) => v.charAt(0).toUpperCase() + v.slice(1) },
-  { key: 'appliesTo', label: 'Applies To' },
-  { key: 'type',      label: 'Type',       render: (v) => v.charAt(0).toUpperCase() + v.slice(1) },
+const money = (value) => `₹${value.toLocaleString('en-IN')}`
+const samplePath = `${import.meta.env.BASE_URL}samples/`
+const RULE_COLUMNS = [
+  {
+    key: 'ruleId',
+    label: 'Rule',
+    render: (value) => (
+      <span className="rule-id" title={value}>
+        {value.startsWith('RULE-') && value.length > 20 ? `RULE-${value.slice(-8)}` : value}
+      </span>
+    ),
+  },
+  { key: 'scope', label: 'Scope', render: (value) => <span className="capitalize">{value}</span> },
+  { key: 'appliesTo', label: 'Applies to', render: (value) => value || 'Entire cart' },
   {
     key: 'value',
-    label: 'Value',
-    render: (v, row) => row.type === 'percentage' ? `${v}% off` : `Rs.${v} off`,
-  },
-  { key: 'stackable', label: 'Stackable',  render: (v) => (v ? 'Yes' : 'No') },
-]
-
-const CART_COLUMNS = [
-  { key: 'itemId',    label: 'Item' },
-  { key: 'product',   label: 'Product' },
-  { key: 'brand',     label: 'Brand' },
-  { key: 'platform',  label: 'Platform' },
-  { key: 'basePrice', label: 'Base Price', render: (v) => `Rs.${v.toLocaleString('en-IN')}` },
-]
-
-const RESULTS_COLUMNS = [
-  { key: 'itemId',    label: 'Item' },
-  { key: 'product',   label: 'Product' },
-  { key: 'basePrice', label: 'Base Price',  render: (v) => `Rs.${v.toLocaleString('en-IN')}` },
-  { key: 'finalPrice',label: 'Final Price',
-    render: (v, row) => (
-      <span style={{ fontWeight: 700, color: row.totalDiscount > 0 ? '#1e5c2c' : '#131A48' }}>
-        Rs.{v.toLocaleString('en-IN')}
-      </span>
-    ),
+    label: 'Offer',
+    render: (value, rule) => (rule.type === 'percentage' ? `${value}% off` : `${money(value)} off`),
   },
   {
-    key: 'totalDiscount',
-    label: 'You Save',
-    render: (v) =>
-      v > 0 ? (
-        <span style={{ color: '#1e5c2c', fontWeight: 600 }}>Rs.{v.toLocaleString('en-IN')}</span>
-      ) : (
-        <span style={{ color: '#888' }}>—</span>
-      ),
+    key: 'minCartValue',
+    label: 'Cart minimum',
+    render: (value) => (value === null ? '—' : `${money(value)} or more`),
   },
-  {
-    key: 'reasoning',
-    label: 'Offer Applied',
-    render: (v) => (
-      <span style={{ color: v === 'No offers available' ? '#888' : '#131A48', fontStyle: v === 'No offers available' ? 'italic' : 'normal' }}>
-        {v}
-      </span>
-    ),
-  },
+  { key: 'stackable', label: 'Stackable', render: (value) => (value ? 'Yes' : 'No') },
 ]
 
-// ── Styles ───────────────────────────────────────────────────────
-
-const S = {
-  page:    { minHeight: '100vh', background: '#f7f7f9', fontFamily: 'Arial, sans-serif' },
-  header:  { background: '#131A48', padding: '0.85rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  logoTxt: { fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' },
-  logoSpan:{ color: '#FF5800' },
-  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.07em' },
-  main:    { maxWidth: 960, margin: '0 auto', padding: '1.8rem 1.5rem' },
-  section: { background: '#fff', border: '1px solid #CECECE', borderRadius: 6, padding: '1.2rem 1.4rem', marginBottom: '1.2rem' },
-  sectionTitle: { fontFamily: 'Georgia, serif', fontWeight: 700, fontSize: 14, color: '#131A48', marginBottom: '0.7rem', paddingBottom: 6, borderBottom: '2px solid #FF5800', display: 'inline-block' },
-  grid2:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' },
-  btn:     {
-    background: '#FF5800', color: '#fff', border: 'none', borderRadius: 4,
-    padding: '0.65rem 2rem', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-    letterSpacing: '0.04em', textTransform: 'uppercase',
-  },
-  btnDisabled: {
-    background: '#CECECE', color: '#fff', border: 'none', borderRadius: 4,
-    padding: '0.65rem 2rem', fontSize: 13, fontWeight: 700, cursor: 'not-allowed',
-    letterSpacing: '0.04em', textTransform: 'uppercase',
-  },
-  totalRow: {
-    display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-    gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem',
-    borderTop: '2px solid #131A48',
-  },
-  totalLabel: { fontWeight: 700, fontSize: 14, color: '#131A48' },
-  totalValue: { fontWeight: 700, fontSize: 16, color: '#131A48' },
-  tag: (color, bg) => ({
-    display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '1px 6px',
-    borderRadius: 20, background: bg, color, textTransform: 'uppercase', letterSpacing: '0.04em',
-  }),
+function CartResults({ checkout }) {
+  return (
+    <section className="panel results-panel" aria-labelledby="results-title">
+      <div className="section-top">
+        <div>
+          <span className="eyebrow">At checkout</span>
+          <h2 id="results-title">A better price, explained.</h2>
+        </div>
+        <span className="badge green">{checkout.results.length} items</span>
+      </div>
+      <div className="checkout-layout">
+        <div className="result-list">
+          {checkout.results.map((item) => (
+            <article className="result-item" key={item.itemId}>
+              <div className="product-mark" aria-hidden="true">
+                {item.product
+                  .split(' ')
+                  .map((word) => word[0])
+                  .slice(0, 2)
+                  .join('')}
+              </div>
+              <div className="item-copy">
+                <div className="item-heading">
+                  <h3>{item.product}</h3>
+                  <span className={`badge ${item.totalDiscount ? 'green' : 'neutral'}`}>
+                    {item.status}
+                  </span>
+                </div>
+                <p className="small muted">
+                  {item.brand} <span aria-hidden="true">·</span> {item.platform}
+                </p>
+                <p className={`offer-label ${item.totalDiscount ? '' : 'muted'}`}>
+                  {item.reasoning}
+                </p>
+                {item.appliedRules.length > 0 && (
+                  <details className="offer-details">
+                    <summary>See savings breakdown</summary>
+                    <ul>
+                      {item.offers.map((offer) => (
+                        <li key={offer.ruleId}>
+                          {offer.label} · {money(offer.priceBefore)} − {money(offer.saving)} ={' '}
+                          {money(offer.priceAfter)}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+              <div className="item-price">
+                <strong data-testid={`price-${item.itemId}`}>{money(item.finalPrice)}</strong>
+                {item.totalDiscount > 0 && (
+                  <>
+                    <s>{money(item.basePrice)}</s>
+                    <span className="saving">Save {money(item.totalDiscount)}</span>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+        <aside className="order-summary" aria-label="Order summary">
+          <h3>Order summary</h3>
+          <div className="summary-row">
+            <span>Original total</span>
+            <span>{money(checkout.baseTotal)}</span>
+          </div>
+          <div className="summary-row">
+            <span>Item savings</span>
+            <span className="saving">−{money(checkout.itemSavings)}</span>
+          </div>
+          <div className="summary-row subtotal">
+            <span>Item subtotal</span>
+            <strong data-testid="item-subtotal">{money(checkout.subtotal)}</strong>
+          </div>
+          {checkout.cartOffers.map((offer) => (
+            <div className="cart-offer" data-testid="cart-offer" key={offer.ruleId}>
+              <span>{offer.label}</span>
+              <strong>−{money(offer.saving)}</strong>
+              <small>{money(offer.saving)} saved on your cart</small>
+            </div>
+          ))}
+          <div className="summary-row final-total">
+            <span>You pay</span>
+            <strong data-testid="final-total">{money(checkout.finalTotal)}</strong>
+          </div>
+          <div className="total-saving">You’re saving {money(checkout.totalSavings)} today.</div>
+          <p className="small muted">
+            Cart offers are checked after item savings. All prices are in INR.
+          </p>
+        </aside>
+      </div>
+    </section>
+  )
 }
 
-// ── Component ────────────────────────────────────────────────────
-
 export default function App() {
-  const [rules, setRules]           = useState([])
-  const [rulesErrors, setRulesErr]  = useState([])
-  const [rulesFileName, setRulesFileName] = useState('')
-
-  const [cartItems, setCartItems]   = useState([])
+  const [rules, setRules] = useState([])
+  const [cartItems, setCartItems] = useState([])
+  const [rulesErrors, setRulesErrors] = useState([])
   const [cartErrors, setCartErrors] = useState([])
-  const [cartFileName, setCartFileName]   = useState('')
+  const [rulesFile, setRulesFile] = useState('No rules loaded')
+  const [cartFile, setCartFile] = useState('No cart loaded')
+  const [busy, setBusy] = useState(false)
+  const [revision, setRevision] = useState(0)
+  const [notice, setNotice] = useState('')
+  const [showCart, setShowCart] = useState(false)
+  const checkout = useMemo(() => calculateCart(cartItems, rules), [cartItems, rules])
 
-  const [results, setResults]       = useState(null)
-
-  // ── Handlers ──
-
-  function handleRulesLoad(csvText, fileName) {
-    const { data, errors } = parseRulesCSV(csvText)
-    setRules(data)
-    setRulesErr(errors)
-    setRulesFileName(fileName)
-    setResults(null) // clear stale results
+  function loadExample() {
+    setRules(parseRulesCSV(rulesCSV).data)
+    setCartItems(parseCartCSV(cartCSV).data)
+    setRulesFile('Sample rules · includes cart offer')
+    setCartFile('Sample cart · 6 items')
+    setRulesErrors([])
+    setCartErrors([])
+    setRevision((value) => value + 1)
+    setNotice('Sample cart and four rules loaded. Checkout is ready below.')
   }
 
-  function handleCartLoad(csvText, fileName) {
-    const { data, errors } = parseCartCSV(csvText)
-    setCartItems(data)
-    setCartErrors(errors)
-    setCartFileName(fileName)
-    setResults(null)
+  async function upload(file, kind) {
+    const isRules = kind === 'rules'
+    const setErrors = isRules ? setRulesErrors : setCartErrors
+    setErrors([])
+    setBusy(true)
+    try {
+      if (file.size > 5 * 1024 * 1024) throw new Error('Please choose a file smaller than 5 MB.')
+      const extension = file.name.split('.').pop().toLowerCase()
+      let parsed
+      if (extension === 'csv') parsed = (isRules ? parseRulesCSV : parseCartCSV)(await file.text())
+      else if (!isRules && extension === 'pdf') {
+        const { parseCartPDF } = await import('./inputs/pdfCartParser.js')
+        parsed = await parseCartPDF(file)
+      } else
+        throw new Error(isRules ? 'Please choose a rules CSV.' : 'Please choose a cart CSV or PDF.')
+      if (parsed.errors.length) {
+        setErrors([
+          ...parsed.errors,
+          'Your previous data has been kept. Fix the file and upload it again.',
+        ])
+        return
+      }
+      if (isRules) {
+        setRules(parsed.data)
+        setRulesFile(file.name)
+        setRevision((value) => value + 1)
+      } else {
+        setCartItems(parsed.data)
+        setCartFile(file.name)
+      }
+      setNotice(
+        `${file.name} loaded. ${isRules ? 'Rules replaced' : 'Cart replaced'} and checkout recalculated.`
+      )
+    } catch (error) {
+      setErrors([error.message, 'Your previous data has been kept.'])
+    } finally {
+      setBusy(false)
+    }
   }
-
-  function handleCalculate() {
-    const res = processCart(cartItems, rules)
-    setResults(res)
-  }
-
-  const canCalculate = rules.length > 0 && cartItems.length > 0
-
-  // ── Render ──
 
   return (
-    <div style={S.page}>
-      {/* Header */}
-      <div style={S.header}>
-        <div style={S.logoTxt}>O<span style={S.logoSpan}>pp</span>tra</div>
-        <div style={S.headerSub}>Discount Engine</div>
-      </div>
-
-      <div style={S.main}>
-
-        {/* Upload row */}
-        <div style={S.grid2}>
-          {/* Rules upload */}
-          <div style={S.section}>
-            <div style={S.sectionTitle}>Discount Rules</div>
-            <CsvUploader
-              label="rules.csv"
-              description="Upload your discount rules CSV"
-              onLoad={handleRulesLoad}
-              hasData={rules.length > 0}
-              fileName={rulesFileName}
-            />
+    <div className="app">
+      <a className="skip-link" href="#main">
+        Skip to workspace
+      </a>
+      <header className="site-header">
+        <div className="header-inner">
+          <a className="wordmark" href="./" aria-label="Opptra home">
+            O<span>pp</span>tra<span className="wordmark-dot">.</span>
+          </a>
+          <div className="header-divider" />
+          <span className="header-title">Discount Studio</span>
+          <span className="session-label">Session workspace</span>
+        </div>
+      </header>
+      <main id="main">
+        <section className="hero">
+          <div>
+            <span className="eyebrow">The discount engine</span>
+            <h1>
+              Every offer.
+              <br />
+              <span>The best price.</span>
+            </h1>
+            <p>
+              Bring your cart and offers together. We’ll work out the savings and show exactly how
+              each price adds up.
+            </p>
+          </div>
+          <div className="hero-action">
+            <button className="button primary" disabled={busy} onClick={loadExample}>
+              Load sample cart & rules
+            </button>
+            <p className="small muted">Six products. Four offers. One clear total.</p>
+          </div>
+        </section>
+        <div className="workspace-stats" aria-label="Workspace status">
+          <span>
+            <strong>{cartItems.length}</strong> cart items
+          </span>
+          <span>
+            <strong>{rules.length}</strong> active rules
+          </span>
+          <span className="stat-saving">
+            <strong>{money(checkout.totalSavings)}</strong> total savings
+          </span>
+        </div>
+        <div className="input-layout">
+          <section className="panel import-panel" aria-labelledby="import-title">
+            <span className="eyebrow">Start with your data</span>
+            <h2 id="import-title">A cart. A few good offers.</h2>
+            <p className="muted">
+              Upload your files or use the sample above. New uploads replace the current data.
+            </p>
+            <div className="upload-grid">
+              <CsvUploader
+                label="Upload discount rules"
+                description="CSV · Brand, platform and cart offers"
+                disabled={busy}
+                onLoad={(file) => upload(file, 'rules')}
+              />
+              <CsvUploader
+                label="Upload cart"
+                description="CSV or text PDF · Up to 5 MB"
+                accept=".csv,.pdf"
+                disabled={busy}
+                onLoad={(file) => upload(file, 'cart')}
+              />
+            </div>
+            <div className="file-status">
+              <span>{rulesFile}</span>
+              <span>{cartFile}</span>
+            </div>
+            {busy && (
+              <p role="status" className="small">
+                Reading your file…
+              </p>
+            )}
             <ErrorBanner errors={rulesErrors} />
-            {rules.length > 0 && (
-              <div style={{ marginTop: '0.75rem' }}>
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
-                  {rules.length} rule{rules.length > 1 ? 's' : ''} loaded
-                </div>
-                <DataTable columns={RULES_COLUMNS} rows={rules} />
-              </div>
-            )}
-          </div>
-
-          {/* Cart upload */}
-          <div style={S.section}>
-            <div style={S.sectionTitle}>Cart Items</div>
-            <CsvUploader
-              label="cart.csv"
-              description="Upload your cart CSV"
-              onLoad={handleCartLoad}
-              hasData={cartItems.length > 0}
-              fileName={cartFileName}
-            />
             <ErrorBanner errors={cartErrors} />
+            <div className="sample-links">
+              <span className="small muted">Sample files</span>
+              <a href={`${samplePath}rules.csv`} download>
+                Rules CSV
+              </a>
+              <a href={`${samplePath}cart.csv`} download>
+                Cart CSV
+              </a>
+              <a href={`${samplePath}cart.pdf`} download>
+                Cart PDF
+              </a>
+            </div>
+            <div className="import-note">
+              <strong>Simple inputs. Clear results.</strong>
+              <p className="small muted">
+                PDFs need a text table with Product, Brand, Platform and Base Price columns. Scanned
+                images aren’t supported.
+              </p>
+            </div>
             {cartItems.length > 0 && (
-              <div style={{ marginTop: '0.75rem' }}>
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
-                  {cartItems.length} item{cartItems.length > 1 ? 's' : ''} loaded
-                </div>
-                <DataTable columns={CART_COLUMNS} rows={cartItems} />
-              </div>
+              <details onToggle={(event) => setShowCart(event.currentTarget.open)}>
+                <summary>View imported cart</summary>
+                {showCart && (
+                  <DataTable
+                    caption="Imported cart"
+                    rows={cartItems}
+                    columns={[
+                      { key: 'product', label: 'Product' },
+                      { key: 'brand', label: 'Brand' },
+                      { key: 'platform', label: 'Platform' },
+                      { key: 'basePrice', label: 'Base price', render: money },
+                    ]}
+                  />
+                )}
+              </details>
             )}
-          </div>
+          </section>
+          <RuleInput
+            key={revision}
+            disabled={busy}
+            onConfirm={(rule) => {
+              const validated = validateDiscountRule(rule)
+              setRules((current) => [...current, validated])
+              setNotice('New rule added. Checkout now includes the updated offers.')
+            }}
+          />
         </div>
-
-        {/* Calculate button */}
-        <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
-          <button
-            style={canCalculate ? S.btn : S.btnDisabled}
-            onClick={handleCalculate}
-            disabled={!canCalculate}
-          >
-            Calculate Discounts
-          </button>
-          {!canCalculate && (
-            <div style={{ fontSize: 11, color: '#888', marginTop: 6 }}>
-              Upload both files to calculate
-            </div>
-          )}
-        </div>
-
-        {/* Results */}
-        {results && (
-          <div style={S.section}>
-            <div style={S.sectionTitle}>Cart Summary</div>
-            <DataTable columns={RESULTS_COLUMNS} rows={results} />
-            <div style={S.totalRow}>
-              <span style={S.totalLabel}>Cart Total</span>
-              <span style={S.totalValue}>Rs.{cartTotal(results).toLocaleString('en-IN')}</span>
-            </div>
-          </div>
+        <p className="workspace-notice" role="status">
+          {notice}
+        </p>
+        {cartItems.length > 0 ? (
+          <CartResults checkout={checkout} />
+        ) : (
+          <section className="panel empty-checkout">
+            <span className="empty-symbol" aria-hidden="true">
+              %
+            </span>
+            <h2>Your next good deal starts here.</h2>
+            <p className="muted">
+              Load the sample or upload a cart to see every item’s final price.
+            </p>
+          </section>
         )}
-
-      </div>
+        <section className="panel active-rules" aria-labelledby="rules-title">
+          <div className="section-top">
+            <div>
+              <span className="eyebrow">Behind the savings</span>
+              <h2 id="rules-title">Active discount rules</h2>
+            </div>
+            <span className="badge neutral">{rules.length} rules</span>
+          </div>
+          <DataTable
+            caption="Active discount rules"
+            columns={RULE_COLUMNS}
+            rows={rules}
+            emptyMessage="No rules yet. Upload a rules CSV or describe a new offer."
+          />
+          <p className="small muted">
+            The best non-stackable offer wins. Stackable offers apply next, in the order shown. Cart
+            offers apply after item discounts.
+          </p>
+        </section>
+      </main>
+      <footer>
+        <span>Opptra Discount Studio</span>
+        <span>Prices explained. Offers made clear.</span>
+        <span>Data stays in this session.</span>
+      </footer>
     </div>
   )
 }

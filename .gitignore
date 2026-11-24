@@ -10,6 +10,8 @@ dist-ssr/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
@@ -31,3 +33,13 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local QA and deployment tooling
+playwright-report/
+test-results/
+coverage/
+.npm-cache/
+.sites-runtime/
+.vercel/
+.netlify/
+*.zip
